@@ -163,12 +163,19 @@ def main() -> None:
     agent_names = [a["name"] for a in agent_dicts]
     agent_css_colors = [a["color_css"] for a in agent_dicts]
 
-    # Ctrl+C handling
+    # Ctrl+C handling: first press = graceful stop, second = hard kill
     stop_event = threading.Event()
+    _sigint_count = 0
 
     def _sigint_handler(sig, frame):
-        console.print("\n[yellow]Stopping...[/yellow]")
-        stop_event.set()
+        nonlocal _sigint_count
+        _sigint_count += 1
+        if _sigint_count == 1:
+            console.print("\n[yellow]Stopping... (Ctrl+C again to force quit)[/yellow]")
+            stop_event.set()
+        else:
+            console.print("\n[red]Force quit.[/red]")
+            os._exit(1)
 
     signal.signal(signal.SIGINT, _sigint_handler)
 
