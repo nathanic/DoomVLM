@@ -128,17 +128,13 @@ def main() -> None:
     for d in (results_dir, screenshot_dir):
         d.mkdir(parents=True, exist_ok=True)
 
-    # Setup logging
+    # Setup logging — file only; TerminalDisplay handles all terminal output
+    # via Rich Live, so no StreamHandler (it would corrupt the display).
     logger.setLevel(logging.DEBUG)
     for h in logger.handlers[:]:
         h.close()
         logger.removeHandler(h)
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-    if not args.no_display:
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.WARNING)
-        ch.setFormatter(fmt)
-        logger.addHandler(ch)
     fh = logging.FileHandler(run_dir / "game.log", mode="w")
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(fmt)

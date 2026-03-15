@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import io
 import logging
+import os
+import sys
 import threading
 from typing import Any
 
-from rich.console import Console
+from rich.console import Console, Group
 from rich.live import Live
 from rich.table import Table
 from rich.text import Text
@@ -14,10 +17,20 @@ from rich.text import Text
 logger = logging.getLogger("doom_dm")
 
 
+class _DevNull:
+    """File-like object that swallows all writes."""
+    def write(self, *a, **kw): pass
+    def flush(self, *a, **kw): pass
+    def fileno(self): raise io.UnsupportedOperation("no fileno")
+
+
 class TerminalDisplay:
     """Live terminal scoreboard + log using Rich.
 
     Same interface as the notebook GameDisplay: show(), update_agent(), log(), stop().
+
+    Redirects stdout/stderr so stray prints (VizDoom, failed VLM calls, etc.)
+    don't corrupt the Live region.
     """
 
     def __init__(self, agent_names: list[str], agent_colors: list[str], game_type: str = "dm"):
@@ -29,15 +42,60 @@ class TerminalDisplay:
         self._lock = threading.Lock()
         self._console = Console()
         self._live: Live | None = None
+        self._saved_stdout: Any = None
+        self._saved_stderr: Any = None
+        self._saved_fd_out: int | None = None
+        self._saved_fd_err: int | None = None
 
     def show(self) -> None:
-        self._live = Live(self._render(), console=self._console, refresh_per_second=4)
+        # Suppress stdout/stderr at the FD level so VizDoom's C-level prints
+        # and Python-level warnings don't corrupt the Rich Live region.
+        try:
+            self._saved_fd_out = os.dup(1)
+            self._saved_fd_err = os.dup(2)
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull, 1)
+            os.dup2(devnull, 2)
+            os.close(devnull)
+        except OSError:
+            pass
+        self._saved_stdout = sys.stdout
+        self._saved_stderr = sys.stderr
+        sys.stdout = _DevNull()
+        sys.stderr = _DevNull()
+
+        self._live = Live(
+            self._render(),
+            console=self._console,
+            refresh_per_second=4,
+            redirect_stdout=False,
+            redirect_stderr=False,
+        )
         self._live.start()
 
     def stop(self) -> None:
         if self._live:
             self._live.stop()
             self._live = None
+
+        # Restore stdout/stderr
+        if self._saved_stdout:
+            sys.stdout = self._saved_stdout
+            self._saved_stdout = None
+        if self._saved_stderr:
+            sys.stderr = self._saved_stderr
+            self._saved_stderr = None
+        try:
+            if self._saved_fd_out is not None:
+                os.dup2(self._saved_fd_out, 1)
+                os.close(self._saved_fd_out)
+                self._saved_fd_out = None
+            if self._saved_fd_err is not None:
+                os.dup2(self._saved_fd_err, 2)
+                os.close(self._saved_fd_err)
+                self._saved_fd_err = None
+        except OSError:
+            pass
 
     def update_agent(self, name: str, step_data: dict) -> None:
         with self._lock:
@@ -54,11 +112,8 @@ class TerminalDisplay:
         if self._live:
             self._live.update(self._render())
 
-    def _render(self) -> Table:
-        outer = Table.grid(padding=(0, 0))
-        outer.add_row(self._render_scoreboard())
-        outer.add_row(self._render_log())
-        return outer
+    def _render(self) -> Group:
+        return Group(self._render_scoreboard(), self._render_log())
 
     def _render_scoreboard(self) -> Table:
         if self._game_type == "solo":
