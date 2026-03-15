@@ -1,0 +1,14 @@
+[game]
+type = "solo"
+scenario = "Basic"
+episodes = 1
+grid_cols = 5
+tics_per_action = 4
+image_size = 512
+record = "none"
+
+[[agents]]
+name = "Agent-1"
+api_url = "http://localhost:1234/v1/chat/completions"
+model = "qwen3.5-0.8b"
+temperature = 0.7
