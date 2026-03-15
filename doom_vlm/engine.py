@@ -8,6 +8,7 @@ import os
 import re
 import time
 import traceback
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -257,6 +258,7 @@ def run_dm_loop(
 
         history_len = agent_cfg.get("history_len", 0)
         history_buffer = collections.deque(maxlen=history_len) if history_len > 0 else None
+        session_id = str(uuid.uuid4())
 
         recorder = (
             EpisodeRecorder(
@@ -328,6 +330,7 @@ def run_dm_loop(
                     max_tokens=agent_cfg["max_tokens"],
                     history=history,
                     api_key=agent_cfg.get("api_key", ""),
+                    session_id=session_id,
                 )
                 parsed = parse_vlm_response(vlm_data, grid_cols)
 
@@ -525,6 +528,7 @@ def run_solo_loop(
 
         history_len = agent_cfg.get("history_len", 0)
         history_buffer = collections.deque(maxlen=history_len) if history_len > 0 else None
+        session_id = str(uuid.uuid4())
 
         recorder = (
             EpisodeRecorder(
@@ -594,6 +598,7 @@ def run_solo_loop(
                     max_tokens=agent_cfg["max_tokens"],
                     history=history,
                     api_key=agent_cfg.get("api_key", ""),
+                    session_id=session_id,
                 )
                 parsed = parse_vlm_response(vlm_data, grid_cols)
 

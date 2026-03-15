@@ -170,6 +170,7 @@ def call_vlm(
     history: list[dict] | None = None,
     timeout: float = 120,
     api_key: str = "",
+    session_id: str = "",
 ) -> tuple[dict, float]:
     """Send screenshot with grid overlay to VLM. All params are explicit."""
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
@@ -185,7 +186,7 @@ def call_vlm(
             },
         ],
     })
-    payload = {
+    payload: dict[str, Any] = {
         "model": model,
         "messages": messages,
         "tools": tools,
@@ -195,6 +196,8 @@ def call_vlm(
         "top_p": top_p,
         "presence_penalty": presence_penalty,
     }
+    if session_id:
+        payload["litellm_session_id"] = session_id
 
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if api_key:

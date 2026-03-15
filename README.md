@@ -11,9 +11,9 @@
   <img src="media/banner.png" alt="DoomVLM Banner" width="700">
 </p>
 
-A Jupyter notebook that lets AI vision models play classic Doom. The AI sees the game screen, decides where to shoot or move, and you watch it happen in real time. Pit up to 4 different models against each other in deathmatch — or test them solo on 11 built-in scenarios.
+A CLI app that lets AI vision models play classic Doom. The AI sees the game screen, decides where to shoot or move, and you watch the live scoreboard in your terminal. Pit up to 4 different models against each other in deathmatch — or test them solo on 11 built-in scenarios.
 
-**How it works:** the notebook takes a screenshot of the game, draws a numbered grid on it, sends it to a vision model, and the model calls `shoot(column)` or `move(direction)`. That's it — the model plays Doom through two simple tools.
+**How it works:** the app takes a screenshot of the game, draws a numbered grid on it, sends it to a vision model, and the model calls `shoot(column)` or `move(direction)`. That's it — the model plays Doom through two simple tools.
 
 ```
 Screenshot → Grid Overlay → VLM API (tool calling) → shoot / move → Game
@@ -30,12 +30,12 @@ Screenshot → Grid Overlay → VLM API (tool calling) → shoot / move → Game
 - [Features](#features)
 - [Quick Start](#quick-start)
 - [System Requirements](#system-requirements)
+- [Configuration](#configuration)
+- [CLI Reference](#cli-reference)
+- [Game Modes](#game-modes)
 - [LM Studio Setup](#lm-studio-setup)
-- [ViZDoom Setup](#vizdoom-setup)
 - [Alternative Backends](#alternative-backends)
 - [RunPod GPU Cloud](#runpod-gpu-cloud)
-- [Game Modes](#game-modes)
-- [Configuration](#configuration)
 - [How It Works](#how-it-works)
 - [Examples](#examples)
 - [Troubleshooting](#troubleshooting)
@@ -51,76 +51,49 @@ Screenshot → Grid Overlay → VLM API (tool calling) → shoot / move → Game
 - **Benchmark Mode** — each agent plays solo vs bots sequentially for fair comparison
 - **Arena Mode** — all agents fight at once via multiprocessing, direct PvP
 - **1-4 Agents** — each with its own model, API endpoint, prompts, and parameters
-- **Live Visualization** — real-time per-agent game frames and scoreboard in Jupyter
+- **Live Terminal Scoreboard** — real-time stats via Rich
 - **Recording** — save episodes as GIF or MP4 with stat overlays (HP, ammo, kills, VLM reasoning)
 - **Tool Use API** — models play through `shoot(column)` and `move(direction)` function calls
 - **Customizable Prompts** — template variables `{health}`, `{ammo}`, `{grid_cols}`, etc.
+- **TOML Config** — all settings in a single file, no GUI required
 - **Any OpenAI-compatible API** — works with LM Studio, Ollama, vLLM, OpenRouter, OpenAI, and more
 
 ---
 
 ## Quick Start
 
-Get running in 5 minutes:
+### 1. Install LM Studio and load a model
 
-### 1. Install LM Studio
-
-Download and install from [lmstudio.ai/download](https://lmstudio.ai/download) (macOS, Windows, Linux).
-
-### 2. Download a model
-
-Open LM Studio, search for **qwen3.5-0.8b** and download it.
-
-Or use the CLI:
-
-```bash
-lms get qwen-3.5-0.8b
-```
-
-This is interactive — you'll be asked to:
-1. **Select a model** — choose `lmstudio-community/Qwen3.5-0.8B-GGUF`
-2. **Select quantization** — choose `Q8_0` (Recommended, ~1 GB)
-
-After download, load it:
-
-```bash
-lms load qwen3.5-0.8b --context-length 4096
-```
-
-> `--context-length` controls how much memory the model uses. 4096 is enough for DoomVLM (each step sends one screenshot + short prompt). Use 8192 if you want longer conversation history.
-
-> Start with the 0.8B model — it's the fastest. Try larger models once everything works.
-
-### 3. Start the server
-
-In LM Studio, go to the **Developer** tab and click **Start Server**.
-
-Or use the CLI:
+Download [LM Studio](https://lmstudio.ai/download), then:
 
 ```bash
 lms server start
+lms get qwen-3.5-0.8b        # interactive — pick lmstudio-community, Q8_0
+lms load qwen3.5-0.8b --context-length 4096
 ```
 
-The API will be available at `http://localhost:1234`.
-
-### 4. Install Python dependencies
+### 2. Install DoomVLM
 
 ```bash
-pip install -r requirements.txt
+git clone https://github.com/your-repo/DoomVLM.git
+cd DoomVLM
+uv run doom-vlm --list-scenarios   # installs deps automatically on first run
 ```
 
-### 5. Open the notebook
+Or with pip:
 
 ```bash
-jupyter lab doom_vlm.ipynb
+pip install -e .
+doom-vlm --list-scenarios
 ```
 
-Then:
+### 3. Run
 
-1. **Run All Cells** (Ctrl+Shift+Enter) — this hides the code and shows the game UI
-2. **Configure your agent** — the defaults work out of the box with LM Studio
-3. **Choose a scenario** — start with "Basic" for the simplest test
-4. **Click "Run Game"** and watch the AI play
+```bash
+uv run doom-vlm example_config.toml
+```
+
+That's it — the agent plays Basic (a single stationary monster) using your local LM Studio server.
 
 ---
 
@@ -129,11 +102,23 @@ Then:
 | | Minimum | Recommended |
 |---|---|---|
 | **OS** | macOS, Linux | macOS, Linux |
-| **Python** | 3.11 | 3.11+ |
+| **Python** | 3.11 | 3.12+ |
 | **RAM** | 8 GB | 16 GB |
 | **Disk** | 2 GB (for smallest model) | 10+ GB |
 
-> Windows is supported through WSL (Windows Subsystem for Linux).
+> Windows is supported through WSL.
+
+**Linux system dependencies** (for headless rendering and recording):
+
+```bash
+sudo apt-get install ffmpeg fonts-dejavu-core libsdl2-dev zstd
+```
+
+**macOS** (for MP4 recording):
+
+```bash
+brew install ffmpeg
+```
 
 ### Model sizes
 
@@ -151,163 +136,164 @@ Then:
 | MacBook M1 Pro 16 GB (CPU/MLX) | Qwen3.5-0.8B | ~10 sec |
 | [RunPod](https://runpod.io?ref=dz2ritri) L40S (GGUF Q8) | Qwen3.5-0.8B | ~0.5 sec |
 
-> Local CPU/MLX inference works but is slow. For real-time gameplay consider a GPU — cloud options like [RunPod](https://runpod.io?ref=dz2ritri) give you instant access to powerful GPUs.
-
 ---
 
-## LM Studio Setup
+## Configuration
 
-[LM Studio](https://lmstudio.ai/) is the recommended backend — it runs models locally on your machine with zero configuration.
+DoomVLM uses TOML config files. The config has two sections: `[game]` for game settings and `[[agents]]` for agent definitions.
 
-### Installation
+### Minimal config
 
-1. Download from [lmstudio.ai/download](https://lmstudio.ai/download)
-2. Install and open the application
-3. Search for a Qwen 3.5 model in the Discover tab and download it
+```toml
+[game]
+type = "solo"
+scenario = "Basic"
 
-### Starting the server
-
-**GUI:** Go to the Developer tab → Start Server
-
-**CLI** (headless, no GUI needed):
-
-```bash
-# Start the API server
-lms server start
-
-# Check what models are downloaded
-lms ls
-
-# Check what's currently loaded
-lms ps
-
-# Stop the server
-lms server stop
+[[agents]]
+name = "Agent-1"
+api_url = "http://localhost:1234/v1/chat/completions"
+model = "qwen3.5-0.8b"
 ```
 
-> Models load automatically on first API request (JIT loading). You don't need to load them manually.
+### Full game settings
 
-### Key details
+```toml
+[game]
+type = "solo"              # "solo" or "deathmatch"
+scenario = "Basic"         # scenario name (use --list-scenarios to see all)
+episodes = 3               # number of episodes per agent
+grid_cols = 5              # screen divisions for aiming (3-10, more = finer aim)
+tics_per_action = 4        # game ticks between VLM decisions (1-8, fewer = faster)
+image_size = 512           # screenshot resolution sent to VLM (128-1024)
+record = "mp4"             # "none", "gif", or "mp4"
 
-- API endpoint: `http://localhost:1234/v1/chat/completions`
-- All models share the same port (1234) — the model is selected via the `model` field in the request
-- `lms get` is interactive — it shows a model picker where you choose the repo (pick `lmstudio-community`) and quantization (pick `Q8_0`)
-- Tool calling (function calling) is supported natively
-
-### Official documentation
-
-- [LM Studio Docs](https://lmstudio.ai/docs/) — main documentation
-- [CLI Reference](https://lmstudio.ai/docs/cli) — all CLI commands
-- [Headless Mode](https://lmstudio.ai/docs/advanced/headless) — run without GUI
-- [OpenAI-compatible API](https://lmstudio.ai/docs/developer/openai-compat) — API reference
-- [Tool Use / Function Calling](https://lmstudio.ai/docs/developer/openai-compat/tools) — how tool calling works
-- [Model Catalog](https://lmstudio.ai/models) — browse available models
-
----
-
-## ViZDoom Setup
-
-[ViZDoom](https://vizdoom.farama.org/) is the game engine — it provides Doom as a research environment.
-
-### Installation
-
-```bash
-pip install vizdoom
+# Deathmatch-only settings (ignored for solo):
+mode = "benchmark"         # "benchmark" (sequential) or "arena" (simultaneous)
+timing = "realtime"        # "realtime" or "sync"
+bots = 4                   # built-in AI opponents (0-7)
+time_limit = 5.0           # game duration in minutes
 ```
 
-This is already included in `requirements.txt`, so if you ran `pip install -r requirements.txt` you're good.
+### Agent settings
 
-### System dependencies
+Each `[[agents]]` block defines one agent (up to 4). Colors are assigned automatically: green, red, blue, yellow.
 
-**Linux** (for the game window and recording):
-
-```bash
-sudo apt-get install ffmpeg fonts-dejavu-core libsdl2-dev zstd
+```toml
+[[agents]]
+name = "Agent-1"
+api_url = "http://localhost:1234/v1/chat/completions"
+model = "qwen3.5-0.8b"
+api_key = ""                       # required for cloud APIs, leave empty for local
+temperature = 0.7
+top_p = 0.8
+presence_penalty = 1.5
+max_tokens = 200
+history_len = 0                    # previous turns to include (0 = no memory)
+history_images = false             # include screenshots in history (uses more VRAM)
+system_prompt = "You are playing DOOM."
+user_prompt = "HP={health} AMMO={ammo}"
+shoot_desc = "Shoot at the enemy. Call when you see an enemy on screen."
+move_desc = "Move around when no enemy is visible."
+column_desc = "Enemy Column number 1-{grid_cols}"
+direction_desc = "Direction to move"
 ```
 
-**macOS** (for MP4 recording):
+### Multiple agents
 
-```bash
-brew install ffmpeg
+Add more `[[agents]]` blocks — TOML's double-bracket syntax creates an array:
+
+```toml
+[[agents]]
+name = "small"
+api_url = "http://localhost:1234/v1/chat/completions"
+model = "qwen3.5-0.8b"
+
+[[agents]]
+name = "large"
+api_url = "http://localhost:1234/v1/chat/completions"
+model = "qwen3.5-4b"
 ```
 
-> The notebook auto-detects the OS and installs system dependencies automatically on first run. Manual installation is only needed if the auto-install fails.
+### Using cloud APIs
 
-### Official documentation
+```toml
+[[agents]]
+name = "GPT-4o"
+api_url = "https://api.openai.com/v1/chat/completions"
+model = "gpt-4o"
+api_key = "sk-..."
 
-- [ViZDoom Documentation](https://vizdoom.farama.org/) — main docs
-- [Python Quick Start](https://vizdoom.farama.org/introduction/python_quickstart/) — getting started
-- [Default Scenarios](https://vizdoom.farama.org/environments/default/) — built-in scenarios reference
-- [GitHub Repository](https://github.com/Farama-Foundation/ViZDoom) — source code
-- [PyPI Package](https://pypi.org/project/vizdoom/) — package info
+[[agents]]
+name = "Local"
+api_url = "http://localhost:1234/v1/chat/completions"
+model = "qwen3.5-0.8b"
+```
 
----
+### Prompt template variables
 
-## Alternative Backends
+Use these in `system_prompt`, `user_prompt`, and tool descriptions — they're replaced with live game values:
 
-DoomVLM works with **any OpenAI-compatible API** that supports vision and tool calling. Just change the API URL and model name in the agent configuration.
-
-| Backend | API URL | Notes |
+| Variable | Available In | Description |
 |---|---|---|
-| [LM Studio](https://lmstudio.ai/) | `http://localhost:1234/v1/chat/completions` | Recommended. Local, free, easy setup |
-| [Ollama](https://ollama.com/) | `http://localhost:11434/v1/chat/completions` | Local, free. Needs vision + tool calling model |
-| [vLLM](https://docs.vllm.ai/) | `http://localhost:8000/v1/chat/completions` | Local, free. GPU required |
-| [OpenRouter](https://openrouter.ai/) | `https://openrouter.ai/api/v1/chat/completions` | Cloud. Many models. Requires API key |
-| [OpenAI](https://platform.openai.com/) | `https://api.openai.com/v1/chat/completions` | Cloud. GPT-4o has vision + tools. Requires API key |
-| [Anthropic](https://docs.anthropic.com/) | `https://api.anthropic.com/v1/messages` | Cloud. Claude with vision + tools. Requires API key |
+| `{grid_cols}` | System, User, Tools | Number of grid columns on screen |
+| `{health}` | User prompt | Current HP |
+| `{ammo}` | User prompt | Current ammo count |
+| `{frags}` | User prompt | Frag count (deathmatch) |
+| `{deaths}` | User prompt | Death count (deathmatch) |
+| `{kills}` | User prompt | Kill count (solo) |
+| `{reward}` | User prompt | Cumulative reward (solo) |
+| `{step}` | User prompt | Current game step number |
 
-> You can use cloud APIs (Claude, ChatGPT, etc.) directly from your local machine — no LM Studio or GPU needed. Just set the API URL, model name, and API key in the agent config.
+### Conversation history
 
-To use a different backend, configure the agent's **API URL**, **Model**, and **API Key** (if needed) in the notebook UI.
+Set `history_len` to give the agent memory of previous turns:
+
+```toml
+[[agents]]
+name = "Agent-1"
+api_url = "http://localhost:1234/v1/chat/completions"
+model = "qwen3.5-4b"
+history_len = 5              # remember last 5 turns
+history_images = false       # text-only history (cheaper)
+```
+
+With `history_images = true`, each history turn includes the screenshot — more context but significantly more tokens/VRAM. Only useful with larger context windows (8k+).
 
 ---
 
-## RunPod GPU Cloud
+## CLI Reference
 
-Don't have a GPU? Run DoomVLM on a cloud GPU with [RunPod](https://runpod.io?ref=dz2ritri) — inference drops from ~10 sec/step (MacBook CPU) to ~0.5 sec/step (L40S).
-
-### 1. Create a Pod
-
-1. Sign up at [runpod.io](https://runpod.io?ref=dz2ritri)
-2. Click **Deploy** → choose a GPU (L40S recommended, or cheaper for smaller models)
-3. Select template: **Runpod Pytorch 2.8.0** (`runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404`)
-4. Deploy the Pod
-
-### 2. Connect to JupyterLab
-
-Once the Pod is running, go to the **Connect** tab → click **Jupyter Lab** (Port 8888). This opens JupyterLab in your browser.
-
-### 3. Upload the notebook
-
-Drag and drop `doom_vlm.ipynb` into JupyterLab's file browser.
-
-### 4. Install LM Studio and start serving
-
-Open a **Terminal** in JupyterLab and run:
-
-```bash
-# Install LM Studio CLI
-curl -fsSL https://lmstudio.ai/install.sh | bash
-
-# Start the API server
-lms server start
-
-# Download a model (interactive — choose lmstudio-community GGUF, then Q8_0)
-lms get qwen-3.5-0.8b
-
-# Load the model (4k context is enough for DoomVLM)
-lms load qwen3.5-0.8b --context-length 4096
-
-# Download more models for multi-agent battles
-lms get qwen-3.5-2b
-lms get qwen-3.5-4b
+```
+doom-vlm [config.toml] [options]
 ```
 
-### 5. Run the notebook
+| Option | Description |
+|---|---|
+| `config.toml` | Path to TOML config file |
+| `--scenario NAME` | Override scenario from config |
+| `--episodes N` | Override episode count |
+| `--record gif\|mp4\|none` | Override recording format |
+| `--no-display` | Headless mode (log to file only, no Rich display) |
+| `--zip` | Package all workspace results as ZIP after run |
+| `--list-scenarios` | Print scenario table and exit |
 
-Open `doom_vlm.ipynb` → **Run All Cells** (Ctrl+Shift+Enter). The default agent settings point to `localhost:1234` — everything works out of the box.
+Examples:
 
-> With an L40S you can serve multiple models simultaneously and run 4-agent Arena battles at real-time speed.
+```bash
+# Quick test
+doom-vlm example_config.toml
+
+# Override scenario and record
+doom-vlm example_config.toml --scenario "Defend the Center" --record mp4
+
+# Headless (CI/server)
+doom-vlm config.toml --no-display --episodes 10
+
+# List all scenarios
+doom-vlm --list-scenarios
+```
+
+Ctrl+C to stop: first press initiates graceful shutdown, second press force-quits.
 
 ---
 
@@ -331,22 +317,48 @@ Classic ViZDoom training scenarios. The agent plays alone against built-in enemi
 | **My Way Home** | Navigate a maze to find the exit. No enemies. Pure navigation. |
 | **Take Cover** | Dodge incoming fireballs by moving left/right. No weapons. Survival. |
 
+Solo config:
+
+```toml
+[game]
+type = "solo"
+scenario = "Defend the Center"
+episodes = 5
+record = "mp4"
+```
+
 ### Deathmatch — Benchmark Mode
 
 Each agent plays **solo vs bots**, sequentially. Identical conditions for every agent — fair comparison.
 
-Settings: number of bots (0–7), time limit (1–20 min), episodes (1–10).
+```toml
+[game]
+type = "deathmatch"
+scenario = "CIG map01 (small)"
+mode = "benchmark"
+bots = 4
+time_limit = 3.0
+episodes = 3
+```
 
-Results table: Frags, Deaths, K/D ratio, average API latency per agent.
+Results: Frags, Deaths, K/D ratio, average API latency per agent per episode.
 
 ### Deathmatch — Arena Mode
 
-All agents play **together in one game** via multiprocessing. Direct PvP — a faster model gets more actions per second.
+All agents play **together in one game** via multiprocessing. Direct PvP — a faster model gets more actions per second in realtime mode.
 
-Settings: number of bots (0–7), time limit (1–20 min), timing (sync or realtime).
+```toml
+[game]
+type = "deathmatch"
+scenario = "CIG map01 (small)"
+mode = "arena"
+timing = "realtime"
+bots = 0
+time_limit = 5.0
+```
 
-- **Sync** — the game waits for the VLM response before advancing (fair but slow)
-- **Realtime** — faster models get more turns (realistic competition)
+- **`timing = "realtime"`** — faster models get more turns (realistic competition)
+- **`timing = "sync"`** — the game waits for each VLM response before advancing (fair but slow)
 
 ### Deathmatch Maps
 
@@ -359,94 +371,125 @@ Settings: number of bots (0–7), time limit (1–20 min), timing (sync or realt
 
 ---
 
-## Configuration
+## LM Studio Setup
 
-### Agent Settings
+[LM Studio](https://lmstudio.ai/) is the recommended backend — it runs models locally with zero configuration.
 
-Each agent (1–4) can be configured independently:
+### Installation
 
-| Setting | Default | Description |
-|---|---|---|
-| **Name** | Agent-1 | Display name (shown in scoreboard) |
-| **API URL** | `http://localhost:1234/v1/chat/completions` | OpenAI-compatible endpoint |
-| **Model** | `qwen3.5-0.8b` | Model identifier |
-| **API Key** | *(empty)* | Required for cloud APIs (OpenAI, OpenRouter) |
-| **System Prompt** | `"DOOM. Columns 1-{grid_cols}..."` | Instructions for the model |
-| **User Prompt** | `"HP={health} AMMO={ammo}"` | Per-frame context sent with screenshot |
-| **Temperature** | 0.7 | Randomness (0 = deterministic, 1 = creative) |
-| **Top P** | 0.8 | Nucleus sampling threshold |
-| **Top K** | 20 | Top-K sampling |
-| **Presence Penalty** | 1.5 | Penalizes repetition |
-| **Max Tokens** | 200 | Maximum response length |
-| **History Length** | 0 | Number of previous turns to include (0 = no memory) |
+1. Download from [lmstudio.ai/download](https://lmstudio.ai/download)
+2. Install and open the application
+3. Search for a Qwen 3.5 model in the Discover tab and download it
 
-### Prompt Template Variables
+### CLI (headless)
 
-Use these in system and user prompts — they're replaced with live game values:
-
-| Variable | Available In | Description |
-|---|---|---|
-| `{grid_cols}` | System, User, Tools | Number of grid columns on screen |
-| `{health}` | User prompt | Current HP |
-| `{ammo}` | User prompt | Current ammo count |
-| `{frags}` | User prompt | Frag count (deathmatch only) |
-| `{deaths}` | User prompt | Death count (deathmatch only) |
-| `{kills}` | User prompt | Kill count (solo only) |
-| `{reward}` | User prompt | Cumulative reward (solo only) |
-| `{step}` | User prompt | Current game step number |
-
-### Game Settings
-
-| Setting | Range | Default | Description |
-|---|---|---|---|
-| **Grid Columns** | 3–10 | 5 | Screen divisions for aiming (more = finer aim) |
-| **Tics per Action** | 1–8 | 4 | Game ticks between VLM decisions (fewer = more responsive) |
-| **Image Size** | 128–1024 | 512 | Screenshot resolution sent to VLM (larger = more detail, slower) |
-| **Record Format** | none/gif/mp4 | none | Save episode recordings with stat overlays |
-
-### Output Files
-
-Each run creates a timestamped directory inside `workspace/`:
-
-```
-workspace/0001_20260311_221500/
-├── game.log          # Detailed game log (every VLM call, action, stats)
-├── results/          # GIF/MP4 recordings with stat overlays
-└── screenshots/      # Individual frames (used for MP4 encoding)
+```bash
+lms server start                              # start API server
+lms get qwen-3.5-0.8b                        # download (interactive picker)
+lms load qwen3.5-0.8b --context-length 4096  # load into memory
+lms ls                                        # list downloaded models
+lms ps                                        # list loaded models
+lms server stop                               # stop server
 ```
 
-After the run you can download everything as a single ZIP archive from the notebook.
+### Key details
+
+- API endpoint: `http://localhost:1234/v1/chat/completions`
+- All models share port 1234 — selected via the `model` field in the request
+- Models load automatically on first API request (JIT loading)
+- Tool calling (function calling) is supported natively
+- `--context-length 4096` is enough for DoomVLM (each step sends one screenshot + short prompt). Use 8192 if you set `history_len > 0`.
+
+### Official documentation
+
+- [LM Studio Docs](https://lmstudio.ai/docs/) — main documentation
+- [CLI Reference](https://lmstudio.ai/docs/cli) — all CLI commands
+- [Tool Use / Function Calling](https://lmstudio.ai/docs/developer/openai-compat/tools) — how tool calling works
+
+---
+
+## Alternative Backends
+
+DoomVLM works with **any OpenAI-compatible API** that supports vision and tool calling. Change the `api_url` and `model` in the agent config.
+
+| Backend | `api_url` | Notes |
+|---|---|---|
+| [LM Studio](https://lmstudio.ai/) | `http://localhost:1234/v1/chat/completions` | Recommended. Local, free, easy setup |
+| [Ollama](https://ollama.com/) | `http://localhost:11434/v1/chat/completions` | Local, free. Needs vision + tool calling model |
+| [vLLM](https://docs.vllm.ai/) | `http://localhost:8000/v1/chat/completions` | Local, free. GPU required |
+| [OpenRouter](https://openrouter.ai/) | `https://openrouter.ai/api/v1/chat/completions` | Cloud. Many models. Requires `api_key` |
+| [OpenAI](https://platform.openai.com/) | `https://api.openai.com/v1/chat/completions` | Cloud. GPT-4o has vision + tools. Requires `api_key` |
+
+> Cloud APIs work directly from your local machine — no LM Studio or GPU needed.
+
+---
+
+## RunPod GPU Cloud
+
+Don't have a GPU? Run DoomVLM on a cloud GPU with [RunPod](https://runpod.io?ref=dz2ritri) — inference drops from ~10 sec/step (MacBook CPU) to ~0.5 sec/step (L40S).
+
+### Setup
+
+1. Sign up at [runpod.io](https://runpod.io?ref=dz2ritri)
+2. Deploy a Pod with a GPU (L40S recommended)
+3. SSH in and install:
+
+```bash
+# Install LM Studio
+curl -fsSL https://lmstudio.ai/install.sh | bash
+lms server start
+lms get qwen-3.5-0.8b
+lms load qwen3.5-0.8b --context-length 4096
+
+# Clone and run DoomVLM
+git clone https://github.com/your-repo/DoomVLM.git
+cd DoomVLM
+uv run doom-vlm example_config.toml --record mp4
+```
+
+> With an L40S you can serve multiple models simultaneously and run 4-agent Arena battles at real-time speed.
 
 ---
 
 ## How It Works
 
-Each game step follows this cycle:
+Each game step:
 
 ```
 1. ViZDoom renders a frame
-2. The notebook takes a screenshot and draws a numbered grid overlay
-3. The screenshot is resized, JPEG-compressed, and base64-encoded
-4. An API request is sent to the VLM with:
+2. Screenshot is taken and a numbered grid overlay is drawn
+3. Image is resized, JPEG-compressed, and base64-encoded
+4. API request sent to the VLM with:
    - System prompt (instructions)
-   - User prompt (HP, ammo, etc.) + screenshot image
+   - User prompt (HP, ammo, etc.) + screenshot
    - Tool definitions: shoot(column) and move(direction)
-   - tool_choice: "required" (forces the model to call a tool)
-5. The model responds with a tool call:
+   - tool_choice: "required"
+5. Model responds with a tool call:
    - shoot(column=3) → turn to column 3 and fire
    - move(direction="forward") → move forward
-6. The notebook converts this to a ViZDoom action vector
-7. The action is applied to the game
+6. Tool call is converted to a ViZDoom action vector
+7. Action is applied for N tics (tics_per_action)
 8. Repeat
 ```
 
 ### Tools
 
-The model has exactly two tools:
+**`shoot(column)`** — shoot at the specified grid column (1 to N). The app calculates the turn angle needed to aim at that column based on the FOV.
 
-**`shoot(column)`** — shoot at the specified grid column (1 to N). The notebook calculates the turn angle needed to aim at that column based on the FOV.
+**`move(direction)`** — move in the given direction: `forward`, `backward`, `left`, `right`, `strafe_left`, `strafe_right`.
 
-**`move(direction)`** — move in the given direction. Options: `forward`, `backward`, `left`, `right`, `strafe_left`, `strafe_right`.
+### Output files
+
+Each run creates a timestamped directory inside `workspace/`:
+
+```
+workspace/0001_20260311_221500/
+├── game.log          # Detailed log (every VLM call, action, stats)
+├── results/          # GIF/MP4 recordings with stat overlays
+└── screenshots/      # Per-step debug images (screenshot + VLM response)
+```
+
+Use `--zip` to package everything into a single archive.
 
 ---
 
@@ -454,38 +497,88 @@ The model has exactly two tools:
 
 ### Quick test — single agent on Basic
 
-1. Set up one agent with default settings (LM Studio, qwen3.5-0.8b)
-2. Select **Solo** game type
-3. Choose **Basic** scenario
-4. Click **Run Game**
+```bash
+doom-vlm example_config.toml
+```
 
 The agent should kill the stationary monster within a few steps.
 
 ### Model comparison — Benchmark
 
-Compare different model sizes on the same scenario:
+Create `benchmark.toml`:
 
-1. Add 3 agents:
-   - Agent-1: `qwen3.5-0.8b`
-   - Agent-2: `qwen3.5-2b`
-   - Agent-3: `qwen3.5-4b`
-2. Select **Deathmatch** → **Benchmark** mode
-3. Choose **CIG map01 (small)**, 3 bots, 2 min time limit, 3 episodes
-4. Click **Run Game**
+```toml
+[game]
+type = "deathmatch"
+scenario = "CIG map01 (small)"
+mode = "benchmark"
+bots = 3
+time_limit = 2.0
+episodes = 3
 
-Each agent plays 3 episodes against bots. Compare frags, deaths, and K/D ratio.
+[[agents]]
+name = "0.8B"
+api_url = "http://localhost:1234/v1/chat/completions"
+model = "qwen3.5-0.8b"
+
+[[agents]]
+name = "2B"
+api_url = "http://localhost:1234/v1/chat/completions"
+model = "qwen3.5-2b"
+
+[[agents]]
+name = "4B"
+api_url = "http://localhost:1234/v1/chat/completions"
+model = "qwen3.5-4b"
+```
+
+```bash
+doom-vlm benchmark.toml --record mp4
+```
+
+Each agent plays 3 episodes against bots. Compare frags, deaths, and K/D ratio in the results table.
 
 ### Battle Royale — Arena
 
-All models fight each other at the same time:
+Create `arena.toml`:
 
-1. Add 4 agents with different models
-2. Select **Deathmatch** → **Arena** mode
-3. Choose **CIG map01 (small)**, Realtime timing, 0 bots, 5 min limit
-4. Set **Record Format** to mp4
-5. Click **Run Game**
+```toml
+[game]
+type = "deathmatch"
+scenario = "CIG map01 (small)"
+mode = "arena"
+timing = "realtime"
+bots = 0
+time_limit = 5.0
 
-Watch the live scoreboard and download the recording afterwards.
+[[agents]]
+name = "qwen-0.8b"
+api_url = "http://localhost:1234/v1/chat/completions"
+model = "qwen3.5-0.8b"
+
+[[agents]]
+name = "qwen-4b"
+api_url = "http://localhost:1234/v1/chat/completions"
+model = "qwen3.5-4b"
+```
+
+```bash
+doom-vlm arena.toml --record mp4
+```
+
+### Solo gauntlet — all scenarios
+
+```bash
+for s in "Basic" "Defend the Center" "Deadly Corridor" "Health Gathering"; do
+  doom-vlm example_config.toml --scenario "$s" --episodes 3 --record mp4
+done
+```
+
+### Headless CI run
+
+```bash
+doom-vlm config.toml --no-display --episodes 10 --zip
+```
 
 ---
 
@@ -493,31 +586,17 @@ Watch the live scoreboard and download the recording afterwards.
 
 ### LM Studio server not responding
 
-Make sure the server is running:
-
 ```bash
 lms server start
-lms ps  # check loaded models
-```
-
-Verify the API is accessible:
-
-```bash
+lms ps                    # check loaded models
 curl http://localhost:1234/v1/models
 ```
 
 ### Model not found
 
-Check which models are downloaded:
-
 ```bash
-lms ls
-```
-
-Download a model if needed:
-
-```bash
-lms get qwen-3.5-0.8b
+lms ls                    # list downloaded models
+lms get qwen-3.5-0.8b    # download if needed
 ```
 
 ### MP4 recording doesn't work
@@ -534,20 +613,14 @@ sudo apt-get install ffmpeg
 
 ### Empty VLM responses / agent spinning in place
 
-This can happen with smaller models. The notebook has a built-in fallback — on empty responses, the agent moves forward instead of doing nothing.
-
-Try:
+The app has a built-in fallback — on empty responses, the agent moves forward. Try:
 - Increasing `max_tokens` (e.g., to 300)
 - Lowering `temperature` (e.g., to 0.5)
 - Using a larger model
 
-### ViZDoom window errors
-
-The notebook sets `SDL_VIDEODRIVER=dummy` automatically to run headless. If you see SDL-related errors, make sure the environment variable is set before importing vizdoom.
-
 ### Arena mode issues on macOS
 
-Arena uses Python multiprocessing with `fork`, which can deadlock on macOS in some configurations. If Arena freezes, try Benchmark mode instead — it provides the same competitive data via sequential runs.
+Arena uses Python multiprocessing with `fork`, which can deadlock on macOS. If Arena freezes, use Benchmark mode instead — it provides the same competitive data via sequential runs.
 
 ---
 

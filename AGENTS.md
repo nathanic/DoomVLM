@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-DoomVLM is a single Jupyter notebook (`doom_vlm.ipynb`) that lets Vision Language Models play Doom via the ViZDoom engine. The AI sees game screenshots, decides actions through OpenAI-compatible tool calling API (`shoot(column)` / `move(direction)`), and the notebook translates these into game inputs.
+DoomVLM is a CLI app (`doom-vlm`) that lets Vision Language Models play Doom via the ViZDoom engine. The AI sees game screenshots, decides actions through OpenAI-compatible tool calling API (`shoot(column)` / `move(direction)`), and the app translates these into game inputs.
 
 **Game modes:** Solo scenarios (11 classic ViZDoom challenges), Deathmatch Benchmark (sequential fair comparison vs bots), Deathmatch Arena (multiprocessing PvP, all agents simultaneously).
 
@@ -11,79 +11,90 @@ DoomVLM is a single Jupyter notebook (`doom_vlm.ipynb`) that lets Vision Languag
 ## Dev Environment Setup
 
 ```bash
-# Install Python dependencies
-pip install -r requirements.txt
+# Install and run (uv handles dependencies automatically)
+uv run doom-vlm example_config.toml
+
+# Or install with pip
+pip install -e .
+doom-vlm example_config.toml
 
 # Start LM Studio server (install from https://lmstudio.ai/download)
 lms server start
-
-# Download a model
-lms get qwen3.5-0.8b
-
-# Launch the notebook
-jupyter lab doom_vlm.ipynb
+lms get qwen-3.5-0.8b
+lms load qwen3.5-0.8b --context-length 4096
 ```
 
 System dependencies for recording:
 - macOS: `brew install ffmpeg`
-- Linux: `apt-get install ffmpeg fonts-dejavu-core libsdl2-2.0-0 zstd`
+- Linux: `apt-get install ffmpeg fonts-dejavu-core libsdl2-dev zstd`
 
 ## Architecture
 
-The entire project lives in a single notebook with 13 cells:
-
-| Cell | Purpose |
-|------|---------|
-| 0 | Markdown: title and documentation |
-| 1 | CSS: hide code inputs from view |
-| 2 | Setup: imports, constants, scenario catalog, `AgentConfig` dataclass |
-| 3 | Agent configuration UI: per-agent widgets (name, API, model, prompts, parameters) |
-| 4 | Game settings UI: game type, DM mode, timing, bots, recording |
-| 5 | Image utilities and VLM integration: `call_vlm()`, `parse_vlm_response()`, `build_action()` |
-| 6 | Game engine: `EpisodeRecorder`, `setup_dm_host/client()`, `_run_dm_episode()`, `_run_solo_episode()` |
-| 7 | Display and runners: `GameDisplay`, `run_benchmark()`, `run_arena()` |
-| 8 | Run/Stop buttons and orchestrator: `_run_game_inner()` |
-| 9 | Markdown: results section header |
-| 10 | Results tables display |
-| 11 | Show recordings (GIF/MP4) |
-| 12 | ZIP-package results for download |
+```
+doom_vlm/
+  __init__.py        # version string
+  __main__.py        # python -m doom_vlm
+  cli.py             # argparse + main orchestration, workspace setup, signal handling
+  config.py          # constants, SCENARIO_CATALOG, AgentConfig, GameSettings, TOML loading
+  imaging.py         # draw_grid_overlay, encode_frame, screen_to_pil, save_debug_screenshot
+  vlm.py             # call_vlm, parse_vlm_response, build_action, make_vlm_tools
+  engine.py          # setup_solo_game, setup_dm_host/join, run_solo_loop, run_dm_loop
+  recorder.py        # EpisodeRecorder (GIF/MP4 with stat overlays)
+  runners.py         # run_solo_benchmark, run_benchmark, run_arena
+  display.py         # TerminalDisplay (Rich Live) + NullDisplay
+  results.py         # Rich result tables, ZIP packaging
+pyproject.toml       # project metadata, dependencies, entry point
+example_config.toml  # sample TOML config
+```
 
 ## Key Functions and Classes
 
-**VLM Integration (cell 5):**
-- `call_vlm(messages, tools, api_url, model, ...)` — sends base64 screenshot + prompt to API, returns `(response_dict, latency)`
-- `parse_vlm_response(response)` — extracts tool calls, returns `dict(shoot, cell, move, reason)`, fallback to `move="forward"` on failure
-- `build_action(parsed, grid_turn_deltas)` — converts parsed response to 7-element ViZDoom action vector
-- `make_vlm_tools(grid_cols, shoot_desc, move_desc, ...)` — generates OpenAI tool definitions
+**Config (config.py):**
+- `AgentConfig` — dataclass with all per-agent settings
+- `GameSettings` — dataclass for game configuration
+- `load_config(path)` — parses TOML into `(list[AgentConfig], GameSettings)`
+- `SCENARIO_CATALOG` — dict of all available scenarios
+- `format_prompt(template, **kwargs)` — safe prompt formatting (unknown tags left as-is)
 
-**Game Engine (cell 6):**
-- `EpisodeRecorder` — records per-tic frames with stat overlays, outputs GIF or MP4
-- `setup_dm_host(scenario, map_name, num_players, ...)` — initializes ViZDoom host for multiplayer
-- `setup_dm_client(scenario, map_name, agent_name, ...)` — connects client to host
-- `_run_dm_episode(game, agent_cfg, display, ...)` — main game loop, calls VLM each step
-- `_run_solo_episode(game, agent_cfg, display, ...)` — solo scenario loop
+**VLM Integration (vlm.py):**
+- `call_vlm(b64_image, user_text, system_prompt, tools, ...)` — sends base64 screenshot + prompt to API, returns `(response_dict, latency)`, retries up to 3 times
+- `parse_vlm_response(response, grid_cols)` — extracts tool calls, returns `dict(shoot, cell, move, reason)`, fallback to `move="forward"` on failure
+- `build_action(parsed, turn_deltas)` — converts parsed response to 7-element ViZDoom action vector
+- `make_vlm_tools(grid_cols, ...)` — generates OpenAI tool definitions
 
-**Display (cell 7):**
-- `GameDisplay` — thread-safe live multi-agent display using ipywidgets
-- `run_benchmark(agents, scenario, ...)` — sequential benchmark runner
-- `run_arena(agents, scenario, ...)` — multiprocessing arena runner
+**Game Engine (engine.py):**
+- `setup_solo_game(cfg)` — initializes ViZDoom for solo scenarios
+- `setup_dm_host(...)` / `setup_dm_join(...)` — multiplayer setup
+- `setup_benchmark_game(...)` — single-player deathmatch vs bots
+- `run_solo_loop(agent_cfg, game_settings, status_queue, stop_event)` — solo game loop (runs in thread)
+- `run_dm_loop(...)` — deathmatch game loop (runs in thread or subprocess)
 
-**Data (cell 2):**
-- `AgentConfig` — dataclass with all per-agent settings (name, api_url, model, prompts, parameters, tool descriptions)
-- `SCENARIOS` — dict of all available scenarios with paths and map names
+**Display (display.py):**
+- `TerminalDisplay` — Rich Live scoreboard + scrolling log, redirects stdout/stderr to prevent corruption
+- `NullDisplay` — no-op for `--no-display` mode
+
+**Runners (runners.py):**
+- `run_solo_benchmark(agents, settings, display, stop_event)` — sequential solo episodes
+- `run_benchmark(...)` — sequential DM episodes per agent
+- `run_arena(...)` — multiprocessing arena, all agents in one game
+
+**CLI (cli.py):**
+- Parses args, loads TOML config, creates workspace, sets up logging
+- Routes to appropriate runner based on game type/mode
+- Two-stage Ctrl+C: first = graceful stop, second = `os._exit(1)`
 
 ## Known Issues
 
-1. **ipywidgets + threads:** `widgets.Output()` context manager is broken from background threads (ipywidgets#2358). Use `VBox.children` assignment instead — works via comm protocol from any thread.
+1. **macOS multiprocessing:** `multiprocessing.set_start_method("fork")` can deadlock on macOS. Arena mode uses fork. Benchmark mode (threads) is safer.
 
-2. **macOS multiprocessing:** `multiprocessing.set_start_method("fork")` from Jupyter can deadlock on macOS. Arena mode uses fork with a fallback. Future improvement: migrate to threads or extract game loop to a `.py` module for "spawn" compatibility.
+2. **VLM response parsing:** Some models emit `<think>...</think>` tags or special tokens (`<|im_end|>`, `<|eot_id|>`). These are stripped before parsing. Empty responses fallback to `move="forward"`.
 
-3. **VLM response parsing:** Some models emit `<think>...</think>` tags or special tokens (`<|im_end|>`, `<|eot_id|>`). These are stripped before parsing. Empty responses fallback to `move="forward"`.
+3. **VizDoom C-level prints:** VizDoom prints to stdout/stderr from C code. `TerminalDisplay` redirects file descriptors 1 and 2 to `/dev/null` while the Live display is active to prevent corruption.
 
 ## Conventions
 
-- Code comments in English
-- Thread-safe widget updates via ipywidgets comm protocol (`.value`, `.children` assignments), never `with Output():`
+- All game logic takes explicit directory parameters (`results_dir`, `screenshot_dir`) — no globals
+- Agent configs are converted to plain dicts for pickling in arena mode (`_agent_dict()`)
 - `tool_choice: "required"` in API calls to force tool call responses
 - Paths use `Path.cwd()` — all relative, no hardcoded user paths
-- Agent colors: green (0), red (1), blue (2), yellow (3)
+- Agent colors: green (0), red (1), blue (2), yellow (3) — assigned by index
