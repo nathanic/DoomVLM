@@ -34,13 +34,13 @@ AGENT_COLORS = [
 ]
 
 # Default tool descriptions
-DEFAULT_SHOOT_DESC = "Shoot at the enemy. Call when you see an enemy on screen."
+DEFAULT_SHOOT_DESC = "Shoot at the enemy. Call when you see a live enemy on screen."
 DEFAULT_MOVE_DESC = "Move around when no enemy is visible."
 DEFAULT_COLUMN_DESC = "Enemy Column number 1-{grid_cols}"
 DEFAULT_DIRECTION_DESC = "Direction to move"
 
 # Default prompt templates
-DEFAULT_SYSTEM_PROMPT = "You are playing DOOM."
+DEFAULT_SYSTEM_PROMPT = "You are playing DOOM.  Try not to walk straight into walls.  Do not waste ammo shooting enemies that are already dead on the floor."
 DEFAULT_USER_PROMPT = "HP={health} AMMO={ammo}"
 
 # ── Scenario catalog ──

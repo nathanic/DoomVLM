@@ -369,6 +369,10 @@ time_limit = 5.0
 | **Multi DM** | Standard multiplayer deathmatch map. |
 | **Deathmatch** | Classic Doom II deathmatch. Large map with many weapons. |
 
+### Running multiple instances in parallel
+
+Solo and Benchmark modes are safe to run in parallel — each instance spawns its own isolated VizDoom process with no shared state. Arena mode is **not** safe to run in parallel: VizDoom's multiplayer uses a default network port, so two concurrent arenas would have clients joining the wrong game. Run concurrent arenas in separate containers or network namespaces if you need this.
+
 ---
 
 ## LM Studio Setup

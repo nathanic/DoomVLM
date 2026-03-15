@@ -9,6 +9,7 @@ import os
 import signal
 import sys
 import threading
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -115,13 +116,14 @@ def main() -> None:
     except RuntimeError:
         pass
 
-    # Create per-run workspace
+    # Create per-run workspace (use uuid suffix to avoid races between parallel instances)
     base_dir = Path.cwd()
     workspace_root = base_dir / "workspace"
     workspace_root.mkdir(parents=True, exist_ok=True)
     existing = sorted(d.name for d in workspace_root.iterdir() if d.is_dir())
     seq = int(existing[-1].split("_")[0]) + 1 if existing else 1
-    run_id = f"{seq:04d}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    short_id = uuid.uuid4().hex[:6]
+    run_id = f"{seq:04d}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{short_id}"
     run_dir = workspace_root / run_id
     results_dir = run_dir / "results"
     screenshot_dir = run_dir / "screenshots"
