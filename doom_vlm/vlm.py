@@ -221,19 +221,18 @@ def call_vlm(
             data = resp.json()
             elapsed = time.perf_counter() - t0
             msg = data.get("choices", [{}])[0].get("message", {})
+            content = (msg.get("content") or "").strip()
             tool_calls = msg.get("tool_calls")
+            if content:
+                logger.info("[%s] VLM %.1fs content: %s", model, elapsed, content)
             if tool_calls:
                 tc = tool_calls[0]
                 logger.info("[%s] VLM %.1fs tool_call: %s(%s)",
                             model, elapsed, tc["function"]["name"],
                             tc["function"]["arguments"])
-            else:
-                content = (msg.get("content") or "")[:200]
-                if not content:
-                    logger.warning("[%s] VLM %.1fs empty response (no tool_calls, no content)",
-                                   model, elapsed)
-                else:
-                    logger.info("[%s] VLM %.1fs content: %s", model, elapsed, content)
+            elif not content:
+                logger.warning("[%s] VLM %.1fs empty response (no tool_calls, no content)",
+                               model, elapsed)
             return data, elapsed
         except requests.exceptions.RequestException as e:
             if attempt < 2:
