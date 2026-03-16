@@ -63,7 +63,31 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _load_dotenv() -> None:
+    """Load .env file from cwd if it exists. No dependencies."""
+    env_path = Path.cwd() / ".env"
+    if not env_path.is_file():
+        return
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip()
+        # Strip surrounding quotes
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+            value = value[1:-1]
+        # Don't overwrite existing env vars
+        if key not in os.environ:
+            os.environ[key] = value
+
+
 def main() -> None:
+    _load_dotenv()
+
     parser = _build_parser()
     args = parser.parse_args()
 
@@ -154,6 +178,13 @@ def main() -> None:
         logger.info("  Model: %s @ %s", ac.model, ac.api_url)
         logger.info("  Temp=%.1f top_p=%.2f pres_pen=%.1f max_tok=%d",
                      ac.temperature, ac.top_p, ac.presence_penalty, ac.max_tokens)
+        logger.info("  History: %d turns (images=%s)", ac.history_len, ac.history_images)
+        logger.info("  System prompt: %s", ac.system_prompt)
+        logger.info("  User prompt: %s", ac.user_prompt)
+        logger.info("  shoot_desc: %s", ac.shoot_desc)
+        logger.info("  move_desc: %s", ac.move_desc)
+        logger.info("  column_desc: %s", ac.column_desc)
+        logger.info("  direction_desc: %s", ac.direction_desc)
     logger.info("=" * 60)
 
     # Convert AgentConfigs to dicts

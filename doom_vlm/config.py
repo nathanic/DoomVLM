@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
 import tomllib
 from dataclasses import dataclass, field, fields
 from pathlib import Path
@@ -178,10 +180,31 @@ def _agent_dict(ac: AgentConfig) -> dict[str, Any]:
 
 # ── TOML config loading ──
 
+_ENV_RE = re.compile(r"\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def _expand_env(value):
+    """Recursively expand ${VAR} and $VAR references in string values from environment."""
+    if isinstance(value, str):
+        return _ENV_RE.sub(
+            lambda m: os.environ.get(m.group(1) or m.group(2), m.group(0)),
+            value,
+        )
+    if isinstance(value, dict):
+        return {k: _expand_env(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_expand_env(v) for v in value]
+    return value
+
+
 def load_config(path: Path) -> tuple[list[AgentConfig], GameSettings]:
-    """Load agents + game settings from a TOML file."""
+    """Load agents + game settings from a TOML file.
+
+    String values support ``${VAR}`` substitution from environment variables.
+    Unset variables are left as-is.
+    """
     with open(path, "rb") as f:
-        data = tomllib.load(f)
+        data = _expand_env(tomllib.load(f))
 
     # Game settings
     gs_data = data.get("game", {})
