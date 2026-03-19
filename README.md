@@ -75,7 +75,7 @@ lms load qwen3.5-0.8b --context-length 4096
 ### 2. Install DoomVLM
 
 ```bash
-git clone https://github.com/your-repo/DoomVLM.git
+git clone https://github.com/nathanic/DoomVLM.git
 cd DoomVLM
 uv run doom-vlm --list-scenarios   # installs deps automatically on first run
 ```
@@ -134,7 +134,7 @@ brew install ffmpeg
 | Hardware | Model | Inference per step |
 |---|---|---|
 | MacBook M1 Pro 16 GB (CPU/MLX) | Qwen3.5-0.8B | ~10 sec |
-| [RunPod](https://runpod.io?ref=dz2ritri) L40S (GGUF Q8) | Qwen3.5-0.8B | ~0.5 sec |
+| [RunPod](https://runpod.io) L40S (GGUF Q8) | Qwen3.5-0.8B | ~0.5 sec |
 
 ---
 
@@ -430,11 +430,11 @@ DoomVLM works with **any OpenAI-compatible API** that supports vision and tool c
 
 ## RunPod GPU Cloud
 
-Don't have a GPU? Run DoomVLM on a cloud GPU with [RunPod](https://runpod.io?ref=dz2ritri) — inference drops from ~10 sec/step (MacBook CPU) to ~0.5 sec/step (L40S).
+Don't have a GPU? Run DoomVLM on a cloud GPU with [RunPod](https://runpod.io) — inference drops from ~10 sec/step (MacBook CPU) to ~0.5 sec/step (L40S).
 
 ### Setup
 
-1. Sign up at [runpod.io](https://runpod.io?ref=dz2ritri)
+1. Sign up at [runpod.io](https://runpod.io)
 2. Deploy a Pod with a GPU (L40S recommended)
 3. SSH in and install:
 
@@ -446,7 +446,7 @@ lms get qwen-3.5-0.8b
 lms load qwen3.5-0.8b --context-length 4096
 
 # Clone and run DoomVLM
-git clone https://github.com/your-repo/DoomVLM.git
+git clone https://github.com/nathanic/DoomVLM.git
 cd DoomVLM
 uv run doom-vlm example_config.toml --record mp4
 ```
@@ -636,6 +636,7 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## Acknowledgments
 
+- [Mykyta Roshchenko](https://github.com/Felliks) — created the [original DoomVLM notebook](https://github.com/Felliks/DoomVLM) that this project is based on
 - [ViZDoom](https://vizdoom.farama.org/) by [Farama Foundation](https://farama.org/) — the Doom research platform that makes this possible
 - [LM Studio](https://lmstudio.ai/) — local LLM inference made easy
 - [Qwen](https://github.com/QwenLM/Qwen3) by Alibaba — the recommended vision language models
